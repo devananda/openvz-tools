@@ -20,24 +20,23 @@
 #  use -h option to show help
 
 #buildir base
-BUILDDIR="/usr/src"
+BUILDDIR="/mnt/build"
 
 #building tools, like make-kpkg
-NEEDPACKAGES="build-essential kernel-package fakeroot"
+NEEDPACKAGES="build-essential kernel-package fakeroot gcc-4.4"
 
 #kernel.org url for vanilla kernel
 KERNEL_BASE_URL="http://www.kernel.org/pub/linux/kernel/v2.6"
-OPENVZ_BASE_URL="http://download.openvz.org/kernel/branches"
+OPENVZ_BASE_URL="http://ftp.openvz.org/kernel/branches"
 
 declare -A opts
 declare -A KERNELINFO
 KERNELINFO["base"]="2.6.32"
-KERNELINFO["ovzname"]="042stab055.10"
-KERNELINFO["rhelid"]="6"
-KERNELINFO["rhelbranch"]="rhel6-2.6.32"
+KERNELINFO["ovzname"]="042stab055.7"
+KERNELINFO["ovzbranch"]="rhel6-2.6.32-testing"
 KERNELINFO["arch"]="x86_64"
-#http://download.openvz.org/kernel/branches/rhel6-2.6.32/042stab049.6/configs/config-2.6.32-042stab049.6.x86_64
-#http://download.openvz.org/kernel/branches/rhel6-2.6.32/042stab049.6/patches/patch-042stab049.6-combined.gz
+#http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/current/patches/patch-042stab055.7-combined.gz
+#http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/current/configs/config-2.6.32-042stab055.7.x86_64
 #http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.tar.bz2
 
 PROGNAME=$(basename $0)
@@ -47,13 +46,12 @@ print_usage() {
     local hpart
     hpart=$(host_to_localpart)
 
-    echo "Usage: $PROGNAME [-h] [-B <base>] [-O <ovzname>] [-R <rhelid>] [-b <rhelbranch>] [-A <arch>] [-L <localname>] [-D <builddir>]"
+    echo "Usage: $PROGNAME [-h] [-B <base>] [-O <ovzname>] [-b <ovzbranch>] [-A <arch>] [-L <localname>] [-D <builddir>]"
     echo ""
     echo "-h - show this help"
     echo "-B <base> - specifies base (vanilla) kernel version to use, currently this is 2.6.32."
     echo "-O <ovzname> - specifies version for kernel patch which openvz guys have."
-    echo "-R <rhelid> - specifies rhel version id, now latest rhel is 6, previous was 5."
-    echo "-b <rhelbranch> - specifies rhel kernel branch, for now should be rhel6-2.6.32, for rhel 5 should be something like rhel5-2.6.18."
+    echo "-b <ovzbranch> - specifies rhel kernel branch, for now should be rhel6-2.6.32, for rhel 5 should be something like rhel5-2.6.18."
     echo "-A <arch> - specifies processor architecture to use. For now applyed only for config downloading, as building for i386 almost has no reasons."
     echo "-L <localname> - specifies string appended to package, this will allow to distinguish your custom kernel from mirads of others. Highly recommended to be specified by hand, if missed will be set to 2nd level domain or hostname. For this machine defaults to \"${hpart}\" ."
     echo "-D <builddir> - specifies directory where to do kernel builds, as it may require some space, like 10-15GB. Defaults to $BUILDDIR ."
@@ -98,7 +96,7 @@ host_to_localpart() {
 }
 show_opts() {
     echo "The next options will be used for building kernel"
-    for i in "base" "ovzname" "rhelid" "rhelbranch" "arch" "localname" "builddir";do
+    for i in "base" "ovzname" "ovzbranch" "arch" "localname" "builddir";do
         echo "$i: ${opts[$i]}"
     done
 }
@@ -118,11 +116,8 @@ while getopts ":hB:O:R:b:A:L:D:" Option; do
     O)
       opts["ovzname"]="${OPTARG}"
       ;;
-    R)
-      opts["rhelid"]="${OPTARG}"
-      ;;
     b)
-      opts["rhelbranch"]="${OPTARG}"
+      opts["ovzbranch"]="${OPTARG}"
       ;;
     A)
       opts["arch"]="${OPTARG}"
@@ -142,7 +137,7 @@ done
 shift $(($OPTIND - 1))
 
 #let's show building options
-for i in "base" "ovzname" "rhelid" "rhelbranch" "arch";do
+for i in "base" "ovzname" "ovzbranch" "arch";do
     opts[$i]=${opts[$i]:-${KERNELINFO[$i]}}
 done
 opts["localname"]=${opts["localname"]:-$(host_to_localpart)}
@@ -154,10 +149,12 @@ show_opts
 
 #runtime configuration
 kernel_name="linux-${opts["base"]}"
-patch_url="${OPENVZ_BASE_URL}/${opts["rhelbranch"]}/${opts["ovzname"]}/patches/patch-${opts["ovzname"]}-combined.gz"
+
 patch_filename="patch-${opts["ovzname"]}-combined"
-config_url="${OPENVZ_BASE_URL}/${opts["rhelbranch"]}/${opts["ovzname"]}/configs/config-${opts["base"]}-${opts["ovzname"]}.${opts["arch"]}"
+patch_url="${OPENVZ_BASE_URL}/${opts["ovzbranch"]}/${opts["ovzname"]}/patches/$patch_filename.gz"
+
 config_filename="config-${opts["base"]}-${opts["ovzname"]}.${opts["arch"]}"
+config_url="${OPENVZ_BASE_URL}/${opts["ovzbranch"]}/${opts["ovzname"]}/configs/$config_filename"
 
 #requirements
 echo "checking requirements..."
@@ -171,6 +168,14 @@ for i in $NEEDPACKAGES;do
         do_exit=1
     fi
 done
+
+# do extra check for GCC 4.4.6
+gcc-4.4 --version | grep '4.4.6' >/dev/null
+if [ $? -ne 0 ];then
+   echo "gcc-4.4 is not version 4.4.6"
+   do_exit=1
+fi
+
 if [ $do_exit -ne 0 ];then
     echo "exiting";exit 1
 else
@@ -280,12 +285,13 @@ else
 fi
 
 #kernel is patched now, copying config
-cp ../"$config_filename" .config
+#negate all FTRACE configs so that kernel works on Ubuntu
+cat ../"$config_filename" | sed 's/\(.*FTRACE.*\)=y/\1=n/' > .config
 
 #compiling
 #how much cpu we have?
 cpucount=$(grep -cw ^processor /proc/cpuinfo)
-CMD="fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -${opts["ovzname"]}-el${opts["rhelid"]}-openvz --revision ${opts["base"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
+CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -${opts["ovzname"]}-openvz --revision ${opts["base"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
 echo -e "\n"
 echo "using next command to create package:"
 echo "$CMD"
