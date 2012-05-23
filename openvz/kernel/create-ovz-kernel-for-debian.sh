@@ -16,29 +16,41 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-#  This script should build kernel in debian way from openvz patches for rhel and vanilla kernel.
-#  use -h option to show help
-
-#buildir base
-BUILDDIR="/mnt/build"
-
-#building tools, like make-kpkg
-NEEDPACKAGES="build-essential kernel-package fakeroot gcc-4.4"
-
-#kernel.org url for vanilla kernel
-KERNEL_BASE_URL="http://www.kernel.org/pub/linux/kernel/v2.6"
-OPENVZ_BASE_URL="http://ftp.openvz.org/kernel/branches"
+# This script builds an openvz-enabled debian kernel package
+# for Ubuntu Natty and Oneiric, using the OpenVZ RHEL patches.
 
 declare -A opts
 declare -A KERNELINFO
+
+# ----------
+# Edit these options to suit your needs, or specify on cmd-line.
+# 
+# buildir base
+BUILDDIR="/mnt/build"
+# default name for kernel
+LOCALNAME="test"
+# kernel.org url
+KERNEL_BASE_URL="http://www.kernel.org/pub/linux/kernel/v2.6"
+# 
+# openvz.org url
+OPENVZ_BASE_URL="http://ftp.openvz.org/kernel/branches"
+# 
 KERNELINFO["base"]="2.6.32"
 KERNELINFO["ovzname"]="042stab055.7"
 KERNELINFO["ovzbranch"]="rhel6-2.6.32-testing"
 KERNELINFO["arch"]="x86_64"
-#http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/current/patches/patch-042stab055.7-combined.gz
-#http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/current/configs/config-2.6.32-042stab055.7.x86_64
-#http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.tar.bz2
+# 
+# Sample file URLs, for reference.
+# We build these based on the options given above.
+# http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.tar.bz2
+# http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/042stab055.7/patches/patch-042stab055.7-combined.gz
+# http://ftp.openvz.org/kernel/branches/rhel6-2.6.32-testing/042stab055.7/configs/config-2.6.32-042stab055.7.x86_64
+# 
+# ----------
+# You should not need to edit anything below this line
+# ----------
 
+NEEDPACKAGES="build-essential kernel-package fakeroot gcc-4.4"
 PROGNAME=$(basename $0)
 
 print_usage() {
@@ -51,7 +63,7 @@ print_usage() {
     echo "-h - show this help"
     echo "-B <base> - specifies base (vanilla) kernel version to use, currently this is 2.6.32."
     echo "-O <ovzname> - specifies version for kernel patch which openvz guys have."
-    echo "-b <ovzbranch> - specifies rhel kernel branch, for now should be rhel6-2.6.32, for rhel 5 should be something like rhel5-2.6.18."
+    echo "-b <ovzbranch> - specifies kernel branch, for now should be rhel6-2.6.32, for rhel 5 should be something like rhel5-2.6.18."
     echo "-A <arch> - specifies processor architecture to use. For now applyed only for config downloading, as building for i386 almost has no reasons."
     echo "-L <localname> - specifies string appended to package, this will allow to distinguish your custom kernel from mirads of others. Highly recommended to be specified by hand, if missed will be set to 2nd level domain or hostname. For this machine defaults to \"${hpart}\" ."
     echo "-D <builddir> - specifies directory where to do kernel builds, as it may require some space, like 10-15GB. Defaults to $BUILDDIR ."
@@ -68,32 +80,6 @@ print_help() {
     echo "This script should build kernel in debian way from openvz patches for rhel and vanilla kernel"
 }
 
-str_to_localpart() {
-    if [[ -z $1 ]];then return 1;fi
-
-    local hdata hparts localpart
-
-    hdata=(${1//./ }); #changing dots into spaces, then creating array from this
-    hparts=${#hdata[@]}
-    if [[ $hparts -gt 1 ]];then
-        for i in $(($hparts - 2)) $(($hparts - 1));do
-            if [[ -z $localpart ]];then
-                localpart="${hdata[i]}"
-            else
-                localpart="${localpart}.${hdata[i]}"
-            fi
-        done
-    else
-        localpart=${hdata[0]}
-    fi
-    echo $localpart
-}
-host_to_localpart() {
-    local hpart
-    hpart=$(hostname --fqdn)
-    hpart=$(str_to_localpart $hpart)
-    echo "$hpart"
-}
 show_opts() {
     echo "The next options will be used for building kernel"
     for i in "base" "ovzname" "ovzbranch" "arch" "localname" "builddir";do
@@ -101,7 +87,7 @@ show_opts() {
     done
 }
 
-#saving arguments count
+# saving arguments count
 argcount=$#
 
 while getopts ":hB:O:R:b:A:L:D:" Option; do
@@ -136,18 +122,17 @@ while getopts ":hB:O:R:b:A:L:D:" Option; do
 done
 shift $(($OPTIND - 1))
 
-#let's show building options
+# let's show building options
 for i in "base" "ovzname" "ovzbranch" "arch";do
     opts[$i]=${opts[$i]:-${KERNELINFO[$i]}}
 done
-opts["localname"]=${opts["localname"]:-$(host_to_localpart)}
+opts["localname"]=${opts["localname"]:-${LOCALNAME}}
 opts["builddir"]=${opts["builddir"]:-${BUILDDIR}}
 
-#echo -e "\n\n";
 echo "----------------------"
 show_opts
 
-#runtime configuration
+# runtime configuration
 kernel_name="linux-${opts["base"]}"
 
 patch_filename="patch-${opts["ovzname"]}-combined"
@@ -156,15 +141,15 @@ patch_url="${OPENVZ_BASE_URL}/${opts["ovzbranch"]}/${opts["ovzname"]}/patches/$p
 config_filename="config-${opts["base"]}-${opts["ovzname"]}.${opts["arch"]}"
 config_url="${OPENVZ_BASE_URL}/${opts["ovzbranch"]}/${opts["ovzname"]}/configs/$config_filename"
 
-#requirements
+# requirements
 echo "checking requirements..."
 
-#checking packages
+# checking packages
 do_exit=0
 for i in $NEEDPACKAGES;do
     dpkg -p "$i" >/dev/null
     if [ $? -ne 0 ];then
-        echo "missing package $i"
+        echo "ERROR: missing package [$i], please install it."
         do_exit=1
     fi
 done
@@ -172,21 +157,21 @@ done
 # do extra check for GCC 4.4.6
 gcc-4.4 --version | grep '4.4.6' >/dev/null
 if [ $? -ne 0 ];then
-   echo "gcc-4.4 is not version 4.4.6"
+   echo "ERROR: gcc-4.4 is not version 4.4.6"
    do_exit=1
 fi
 
 if [ $do_exit -ne 0 ];then
-    echo "exiting";exit 1
+    echo "Errors encountered. Exiting now."
+    exit 1
 else
-    echo "done"
+    echo "... done"
 fi
 
-#giving user time to think a bit
+# giving user time to think a bit
 if [[ $argcount -lt 1 ]];then
     echo -e "\n\n"
     echo "No parameters were specified, build will start in 10 seconds with settings from above. Press Ctrl+C to stop bulding or Enter to start"
-    echo "use \"$0 -h\" to obtain help"
     read -t 10 || true
 fi
 
@@ -194,64 +179,64 @@ fi
 echo -e "\n"
 echo "#### Building has begun ####"
 
-echo "changing directory to ${opts["builddir"]} ..."
+echo "Changing directory to ${opts["builddir"]} ..."
 cd "${opts["builddir"]}"
 if [ $? -ne 0 ];then #failed
-    echo "can't change directory to ${opts["builddir"]}, exiting"
+    echo "ERROR: Can't change directory to ${opts["builddir"]}, exiting"
     exit 1
 fi
 
 
-#need to download compressed kernel image if it doesn't exist yet
+# need to download compressed kernel image if it doesn't exist yet
 if ! [ -f "$kernel_name.tar.bz2" ];then
     urltoget="${KERNEL_BASE_URL}/${kernel_name}.tar.bz2"
     wget "$urltoget" -O "${kernel_name}.tar.bz2"
     if [ $? -ne 0 ];then #failed
-        echo "download kernel tarball from $urltoget failed, exiting"
+        echo "ERROR: Download kernel tarball from $urltoget failed, exiting"
         exit 1
     fi
 else
     echo "kernel tarball $kernel_name.tar.bz2 already exists, skipping download"
 fi
 
-#clearing old build directory, just in case
+# clearing old build directory, just in case
 if [ -d "./${kernel_name}" ];then
     echo "removing old dir ./${kernel_name}"
     rm -rf "./${kernel_name}"
     if [ $? -ne 0 ];then #failed
-        echo "remove failed, exiting"
+        echo "ERROR: remove failed, exiting"
         exit 1
     fi
 fi
 
-#unpacking archive
+# unpacking archive
 tar -xf "${kernel_name}.tar.bz2"
 if [ $? -ne 0 ];then #failed
-    echo "unpacking failed, exiting"
+    echo "ERROR: unpacking kernel tarball failed, exiting"
     exit 1
 fi
 
-#downloading config
+# downloading config
 if ! [ -f "$config_filename" ];then
     wget "$config_url" -O "$config_filename"
     if [ $? -ne 0 ];then #failed
-        echo "download config from $config_url failed, exiting"
+        echo "ERROR: download config from $config_url failed, exiting"
         exit 1
     fi
 else
     echo "config file $config_filename already exists, skipping download"
 fi
 
-#..patch now
+# downloading patch
 if ! [ -f "$patch_filename" ];then
     wget "$patch_url" -O "$patch_filename.gz"
     if [ $? -ne 0 ];then #failed
-        echo "download patch from $patch_url failed, exiting"
+        echo "ERROR: download patch from $patch_url failed, exiting"
         exit 1
     fi
     gzip -d "$patch_filename"
     if [ $? -ne 0 ];then #failed
-        echo "unzip of patch failed, exiting"
+        echo "ERROR: unzip of patch failed, exiting"
         exit 1
     fi
  
@@ -259,37 +244,38 @@ else
     echo "patch file $patch_filename already exists, skipping download"
 fi
 
-#everything is downloaded, patching now
+# everything is downloaded, patching now
 cd ${kernel_name}
-#dry run for patch
+# dry run for patch
 patch --dry-run --verbose -p1 < "../$patch_filename" > ../patch.log
 if [ $? -ne 0 ];then
-    echo "patch failed to apply clean. check ../patch.log. exiting"
+    echo "ERROR: patch failed to apply clean. check ../patch.log. exiting"
     exit 1
 fi
 
-#checking if patch has failed hunks
+# checking if patch has failed hunks
 fgrep -q 'FAILED at' "../patch.log"
 if [ $? -eq 0 ]; then #grep found some failed strings or just patch failed, we should abort now
-    echo "patch failed to apply clean. check ../patch.log. exiting"
+    echo "ERROR: patch failed to apply clean. check ../patch.log. exiting"
     exit 1
 else
     echo "patch should apply clean now, trying..."
     patch --verbose -p1 < "../$patch_filename" > ../patch.log
     if [ $? -ne 0 ]; then #patch failed somehow anyway
-        echo "patch failed to apply clean. check ../patch.log. exiting"
+        echo "ERROR: patch failed to apply clean. check ../patch.log. exiting"
         exit 1
     else
-        echo "patch applyed without error"
+        echo "patch applied without error"
     fi
 fi
 
-#kernel is patched now, copying config
-#negate all FTRACE configs so that kernel works on Ubuntu
+# kernel is patched now, copying config
+# negate all FTRACE configs so that kernel works on Ubuntu
 cat ../"$config_filename" | sed 's/\(.*FTRACE.*\)=y/\1=n/' > .config
+echo "CONFIG_KMEMCHECK=n" >> .config
 
-#compiling
-#how much cpu we have?
+# compiling
+# how much cpu we have?
 cpucount=$(grep -cw ^processor /proc/cpuinfo)
 CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -${opts["ovzname"]}-openvz --revision ${opts["base"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
 echo -e "\n"
@@ -298,7 +284,7 @@ echo "$CMD"
 sh -c "$CMD"
 build_result=$?
 if [[ $build_result -ne 0 ]];then
-    echo "build failed"
+    echo "ERROR: build failed"
 else
     echo "build succeeded, debian packages may be found in ${opts["builddir"]}"
 fi
