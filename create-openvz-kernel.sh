@@ -31,7 +31,7 @@ declare -A KERNELINFO
 # buildir base
 BUILDDIR="/mnt/build"
 # default name for kernel
-LOCALNAME="test"
+LOCALNAME="devstack"
 # kernel.org url
 KERNEL_BASE_URL="http://www.kernel.org/pub/linux/kernel/v2.6"
 # 
@@ -65,7 +65,7 @@ print_usage() {
     echo "-B <base>      - specifies base (vanilla) kernel version to use.   Default: ${KERNELINFO['base']}"
     echo "-O <ovzname>   - specifies version for openvz kernel patch.        Default: ${KERNELINFO['ovzname']}"
     echo "-b <ovzbranch> - specifies branch name in openvz repo.             Default: ${KERNELINFO['ovzbranch']}"
-    echo "-L <localname> - specifies string appended to package. Change it.  Default: $LOCALNAME"
+    echo "-L <localname> - specifies string appended to package.             Default: $LOCALNAME"
     echo "-D <builddir>  - specifies local build directory.                  Default: $BUILDDIR"
     echo "-A <arch>      - specifies processor architecture to use. Don't change this."
     echo ""
@@ -111,6 +111,10 @@ while getopts ":hB:O:R:b:A:L:D:" Option; do
       ;;
     L)
       opts["localname"]="${OPTARG}"
+      if [ "$(echo ${opts['localname']} | sed 's/[0-9a-zA-Z+.~]//g')" != '' ]; then
+         echo "ERROR: Invalid package name specified. Only letters, digits and characters '-+._' allowed."
+         exit 1
+      fi
       ;;
     D)
       opts["builddir"]="${OPTARG}"
@@ -281,7 +285,7 @@ echo "CONFIG_KMEMCHECK=n" >> .config
 # compiling
 # how much cpu we have?
 cpucount=$(grep -cw ^processor /proc/cpuinfo)
-CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -${opts["ovzname"]}-openvz --revision ${opts["base"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
+CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -openvz --revision ${opts["ovzname"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
 echo -e "\n"
 echo "using next command to create package:"
 echo "$CMD"
