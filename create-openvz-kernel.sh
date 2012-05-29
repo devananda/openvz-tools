@@ -59,9 +59,10 @@ NEEDRELEASE='11.10'
 PROGNAME=$(basename $0)
 
 print_usage() {
-    echo "Usage: $PROGNAME [-h] [-B <base>] [-O <ovzname>] [-b <ovzbranch>] [-A <arch>] [-L <localname>] [-D <builddir>]"
+    echo "Usage: $PROGNAME [-h] [-s] [-B <base>] [-O <ovzname>] [-b <ovzbranch>] [-A <arch>] [-L <localname>] [-D <builddir>]"
     echo ""
     echo "-h - show this help"
+    echo "-s - skip installing prerequisites (useful for non-sudo environment)"
     echo "-B <base>      - specifies base (vanilla) kernel version to use.   Default: ${KERNELINFO['base']}"
     echo "-O <ovzname>   - specifies version for openvz kernel patch.        Default: ${KERNELINFO['ovzname']}"
     echo "-b <ovzbranch> - specifies branch name in openvz repo.             Default: ${KERNELINFO['ovzbranch']}"
@@ -91,11 +92,14 @@ show_opts() {
 # saving arguments count
 argcount=$#
 
-while getopts ":hB:O:R:b:A:L:D:" Option; do
+while getopts ":hsB:O:R:b:A:L:D:" Option; do
   case $Option in
     h)
       print_help
       exit 0
+      ;;
+    s)
+      ops["skip"]=1
       ;;
     B)
       opts["base"]="${OPTARG}"
@@ -161,21 +165,27 @@ if [ ! -w ${opts["builddir"]} ]; then
 fi
 
 # make sure build requirements are met, installing them if necessary
-echo "installing requirements..."
 do_exit=
+if [ ! $opts["skip"] ]; then
+    echo "installing requirements..."
 
-sudo apt-get -y -qq update  || do_exit=${do_exit:-1}
-sudo apt-get -y -qq upgrade || do_exit=${do_exit:-1}
-sudo apt-get -y -qq install $NEEDPACKAGES || do_exit=${do_exit:-1}
+    sudo apt-get -y -qq update  || do_exit=${do_exit:-1}
+    sudo apt-get -y -qq upgrade || do_exit=${do_exit:-1}
+    sudo apt-get -y -qq install $NEEDPACKAGES || do_exit=${do_exit:-1}
+
+    if [ $do_exit ]; then
+        echo "ERROR: installing prereq's failed. Exiting now."
+        exit 1
+    else
+        echo "... done"
+    fi
+fi
 
 # do extra check for GCC 4.4.6
 gcc-4.4 --version | grep '4.4.6' >/dev/null 2>&1 || do_exit=${do_exit:-1}
-
 if [ $do_exit ]; then
-    echo "ERROR: installing prereq's failed. Exiting now."
+    echo "ERROR: wrong version of gcc installed. Need 4.4.6."
     exit 1
-else
-    echo "... done"
 fi
 
 # giving user time to think a bit
