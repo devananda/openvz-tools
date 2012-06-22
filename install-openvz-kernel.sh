@@ -25,11 +25,16 @@
 KERNEL_URL=${KERNEL_URL:-'http://15.185.168.213'}
 KERNEL_BASE=${KERNEL_BASE:-'2.6.32'}
 KERNEL_REV=${KERNEL_REV:-'042stab055.7~devstack'}
-KERNEL_NAME="${KERNEL_BASE}-openvz_${KERNEL_REV}"
+KERNEL_NAME=${KERNEL_NAME:-"${KERNEL_BASE}-openvz_${KERNEL_REV}"}
 
 # do we need vzdump? it pulls in exim4 and many other packages
 VZ_PACKAGES="vzctl vzquota"
 
+# we also need to install an older version of rsyslog
+# new versions eat CPU with this kernel 
+# see bug: https://bugs.launchpad.net/ubuntu/+source/rsyslog/+bug/523610
+RSYSLOG_URL=${RSYSLOG_URL:-'http://mirror.netcologne.de/ubuntu/pool/main/r/rsyslog/'}
+RSYSLOG_PACKAGE=${RSYSLOG_PACKAGE:-'rsyslog_4.2.0-2ubuntu8_amd64.deb'}
 
 # ###########################
 # routines to do all our work
@@ -93,7 +98,15 @@ do_install_extra_packages() {
    echo "Installing openvz packages..."
    sudo apt-get -q -y install $VZ_PACKAGES > install.log 2>&1 || \
       die "failed to install openvz packages: $VZ_PACKAGES"
-   echo ".. done"
+   echo "... done"
+
+   echo "Installing rsyslog fix..."
+   wget -q $RSYSLOG_URL/$RSYSLOG_PACKAGE -O /tmp/$RSYSLOG_PACKAGE || \
+      die "failed to donwload rsyslog"
+   sudo dpkg -i /tmp/$RSYSLOG_PACKAGE >> install.log 2>&1 || \
+      die "failed to install rsyslog"
+   echo "... done"
+
 }
 
 die() {
