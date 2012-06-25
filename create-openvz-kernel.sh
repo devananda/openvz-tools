@@ -166,7 +166,7 @@ fi
 
 # make sure build requirements are met, installing them if necessary
 do_exit=
-if [ ! $opts["skip"] ]; then
+if [ ! ${opts["skip"]} ]; then
     echo "installing requirements..."
 
     sudo apt-get -y -qq update  || do_exit=${do_exit:-1}
