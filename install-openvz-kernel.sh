@@ -22,9 +22,23 @@
 # ############
 # set defaults
 
+# try to auto-detect the latest version from openvz
+OPENVZ_BASE_URL="http://ftp.openvz.org/kernel/branches"
+KERNELINFO["ovzbranch"]="rhel6-2.6.32-testing"
+DEFAULT_VER="042stab055.7"
+CURRENT_VER=$(curl $OPENVZ_BASE_URL/rhel6-2.6.32-testing/current/patches/ 2>/dev/null | grep .gz.asc | sed 's/.*patch-\(.*\)-combined.gz.asc.*/\1/')
+if [ "$CURRENT_VER" ]; then
+   CURRENT_VER="${CURRENT_VER}~devstack"
+else
+   CURRENT_VER=''
+   echo "NOTE: failed to auto-detect current version of kernel from openvz.org"
+   echo "NOTE: defaulting to $DEFAULT_VER"
+   CURRENT_VER="${DEFAULT_VER}~devstack"
+fi
+
 KERNEL_URL=${KERNEL_URL:-'http://15.185.168.213'}
 KERNEL_BASE=${KERNEL_BASE:-'2.6.32'}
-KERNEL_REV=${KERNEL_REV:-'042stab055.7~devstack'}
+KERNEL_REV=${KERNEL_REV:-$CURRENT_VER}
 KERNEL_NAME=${KERNEL_NAME:-"${KERNEL_BASE}-openvz_${KERNEL_REV}"}
 
 # do we need vzdump? it pulls in exim4 and many other packages
