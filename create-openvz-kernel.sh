@@ -39,9 +39,15 @@ KERNEL_BASE_URL="http://www.kernel.org/pub/linux/kernel/v2.6"
 OPENVZ_BASE_URL="http://ftp.openvz.org/kernel/branches"
 # 
 KERNELINFO["base"]="2.6.32"
-KERNELINFO["ovzname"]="042stab055.7"
 KERNELINFO["ovzbranch"]="rhel6-2.6.32-testing"
 KERNELINFO["arch"]="x86_64"
+
+# try to auto-detect the latest version from openvz
+CURRENT_VER=$(curl $OPENVZ_BASE_URL/${KERNELINFO["ovzbranch"]}/current/patches/ 2>/dev/null | grep .gz.asc | sed 's/.*patch-\(.*\)-combined.gz.asc.*/\1/')
+
+# fall back to a known good version otherwise
+KERNELINFO["ovzname"]=${CURRENT_VER:-"042stab055.7"}
+
 # 
 # Sample file URLs, for reference.
 # We build these based on the options given above.
