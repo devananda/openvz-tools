@@ -28,18 +28,18 @@ KERNELINFO["ovzbranch"]="rhel6-2.6.32-testing"
 DEFAULT_VER="042stab055.7"
 CURRENT_VER=$(curl $OPENVZ_BASE_URL/rhel6-2.6.32-testing/current/patches/ 2>/dev/null | grep .gz.asc | sed 's/.*patch-\(.*\)-combined.gz.asc.*/\1/')
 if [ "$CURRENT_VER" ]; then
-   CURRENT_VER="${CURRENT_VER}~devstack"
+   CURRENT_VER="${CURRENT_VER}"
 else
    CURRENT_VER=''
    echo "NOTE: failed to auto-detect current version of kernel from openvz.org"
    echo "NOTE: defaulting to $DEFAULT_VER"
-   CURRENT_VER="${DEFAULT_VER}~devstack"
+   CURRENT_VER="${DEFAULT_VER}"
 fi
 
 KERNEL_URL=${KERNEL_URL:-'http://15.185.168.213'}
 KERNEL_BASE=${KERNEL_BASE:-'2.6.32'}
 KERNEL_REV=${KERNEL_REV:-$CURRENT_VER}
-KERNEL_NAME=${KERNEL_NAME:-"${KERNEL_BASE}-openvz_${KERNEL_REV}"}
+KERNEL_NAME=${KERNEL_NAME:-"${KERNEL_BASE}-openvz-${KERNEL_REV}_${KERNEL_REV}~devstack"}
 
 # do we need vzdump? it pulls in exim4 and many other packages
 VZ_PACKAGES="vzctl vzquota"
@@ -55,11 +55,11 @@ RSYSLOG_PACKAGE=${RSYSLOG_PACKAGE:-'rsyslog_4.2.0-2ubuntu8_amd64.deb'}
 
 do_download() {
    echo "Downloading kernel packages..."
-   if [ ! -f "linux-headers-${BUILD_NAME}_amd64.deb" ]; then
+   if [ ! -f "linux-headers-${KERNEL_NAME}_amd64.deb" ]; then
       wget -q "${KERNEL_URL}/linux-headers-${KERNEL_NAME}_amd64.deb" || \
          die "failed to download kernel headers"
    fi
-   if [ ! -f "linux-image-${BUILD_NAME}_amd64.deb" ]; then
+   if [ ! -f "linux-image-${KERNEL_NAME}_amd64.deb" ]; then
       wget -q "${KERNEL_URL}/linux-image-${KERNEL_NAME}_amd64.deb" || \
          die "failed to download kernel image"
    fi
@@ -68,16 +68,27 @@ do_download() {
 
 do_install_kernel() { 
    echo "installing kernel ..."
-   sudo dpkg -i linux-headers-${KERNEL_NAME}_amd64.deb linux-image-${KERNEL_NAME}_amd64.deb > install.log 2>&1 || \
+   sudo dpkg -i linux-headers-${KERNEL_NAME}_amd64.deb linux-image-${KERNEL_NAME}_amd64.deb >> install.log 2>&1 || \
       die "dpkg install of kernels failed"
    echo "... done"
 }
 
-do_update_grub() {
-   echo "updating grub ..."
+do_remove_kernels() {
+   echo "Removing previous kernels..."
+   klist=$(dpkg-query --list 'linux-image*' | grep -P '^ii\s*linux-image' | grep -v "${KERNEL_NAME}" | awk '{print $2}')
+   hlist=$(dpkg-query --list 'linux-headers' | grep -P '^ii\s*linux-headers' | grep -v "${KERNEL_NAME}" | awk '{print $2}')
 
+   for k in $klist $hlist
+   do
+      sudo dpkg --remove $k >> install.log 2>&1 || \
+         die "dpkg failed to remove package $k"
+   done
+}
+
+do_disable_grub_submenu() {
+   echo "Disabling grub submenus..."
    # remove 3 linues from /etc/grub.d/10_linux to disable submenus in grub
-   sed -n '1h;1!H;${;g;s/if \[ "$list" \] && ! $in_submenu; then\n.*in_submenu=:\n\s*fi/# submenu removed/g;p;}' \
+   sed  -n '1h;1!H;${;g;s/if \[ "$list" \] && ! $in_submenu; then\n.*in_submenu=:\n\s*fi/# submenu removed/g;p;}' \
       /etc/grub.d/10_linux > /tmp/10_linux || \
       die "failed to read /etc/grub.d/10_linux"
    ol=$(wc -l /etc/grub.d/10_linux | awk '{print $1}')
@@ -86,31 +97,34 @@ do_update_grub() {
       sudo chown root:root /tmp/10_linux 
       sudo chmod 755 /tmp/10_linux
       sudo mv /tmp/10_linux /etc/grub.d/10_linux 
+   elif  [ $(($ol - $nl)) -eq 0 ]; then
+      echo "... submenus previously disabled. Not changing /etc/grub.d/10_linux"
    else
       die "editing of /etc/grub.d/10_linux failed. Check temporary file /tmp/10_linux"
    fi
+}
+
+do_update_grub() {
+   echo "Updating grub ..."
 
    # find our new kernel and make it default
-   knum=$(grep menuentry /boot/grub/grub.cfg | grep -n openvz | grep -v 'recovery mode' | sed 's/^\([0-9]*\):.*/\1/')
+   knum=$(grep menuentry /boot/grub/grub.cfg | grep -n "openvz-${KERNEL_REV}" | grep -v 'recovery mode' | sed 's/^\([0-9]*\):.*/\1/')
    if [ ! $knum ]; then
       die "failed to identify index of new kernel"
    fi
    # menu entries start from index 0, so we need to subtract 1 from grep linenum
    knum=$(($knum - 1))
-   sed "s/^GRUB_DEFAULT=[0-9]$/GRUB_DEFAULT=$knum/" /etc/default/grub > /tmp/grub
-   sudo chown root:root /tmp/grub
-   sudo chmod 644 /tmp/grub 
-   sudo mv /tmp/grub /etc/default/grub 
+   sudo sed -i "s/^GRUB_DEFAULT=[0-9]$/GRUB_DEFAULT=$knum/" /etc/default/grub
 
    # rebuild /boot/grub/grub.cfg with our changes
-   sudo update-grub > install.log 2>&1 || \
+   sudo update-grub >> install.log 2>&1 || \
       die "updating grub failed. Check install.log"
    echo "... done"
 }
 
 do_install_extra_packages() {
    echo "Installing openvz packages..."
-   sudo apt-get -q -y install $VZ_PACKAGES > install.log 2>&1 || \
+   sudo apt-get -q -y install $VZ_PACKAGES >> install.log 2>&1 || \
       die "failed to install openvz packages: $VZ_PACKAGES"
    echo "... done"
 
@@ -133,6 +147,8 @@ die() {
 
 do_download
 do_install_kernel
+#do_remove_kernels
+do_disable_grub_submenu
 do_update_grub
 do_install_extra_packages
 
