@@ -133,6 +133,8 @@ do_install_extra_packages() {
       die "failed to donwload rsyslog"
    sudo dpkg -i /tmp/$RSYSLOG_PACKAGE >> install.log 2>&1 || \
       die "failed to install rsyslog"
+   sudo bash -c 'echo rsyslog hold | dpkg --set-selections' || \
+      die "failed to pin rsyslog version"
    echo "... done"
 
 }
