@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Download and install openvz-enabled ubuntu kernel and modify grub.cfg 
+# to boot into that kernel, regardless of other installed kernels.
+# This will also install add'l required tools:
+#   vzctl, vzquota, and an old version of rsyslog
+
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation; either version 2 of the License, or
@@ -14,9 +19,6 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-# If you created an OpenVZ-enabled Ubuntu kernel using create-openvz-kernel.sh
-# then use this script to install the kernel packages, related openvz tools,
-# and invoke them all on the next boot
 
 
 # ############

@@ -1,9 +1,13 @@
 #!/bin/bash
-#
+
+# This script builds an openvz-enabled debian kernel package
+# for Ubuntu 11.04, 11.10, and 12.04, using the OpenVZ RHEL patches.
+# Note that this script needs a specific version of GCC, 
+# which is only present in Ubutu 11.10 (Oneiric).
+
 #  Forked from https://github.com/CoolCold/tools/blob/master/openvz/kernel/create-ovz-kernel-for-debian.sh
 #              https://github.com/CoolCold/tools/commit/02540e1894fec1015296981f72324540088e2ade
 #  Original copyright  (C) 2012, Roman Ovchinnikov, coolthecold@gmail.com
-#
 
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -19,8 +23,6 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
-# This script builds an openvz-enabled debian kernel package
-# for Ubuntu Natty and Oneiric, using the OpenVZ RHEL patches.
 
 declare -A opts
 declare -A KERNELINFO
