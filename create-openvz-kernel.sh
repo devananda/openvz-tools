@@ -303,7 +303,7 @@ echo "CONFIG_KMEMCHECK=n" >> .config
 # compiling
 # how much cpu we have?
 cpucount=$(grep -cw ^processor /proc/cpuinfo)
-CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -openvz --revision ${opts["ovzname"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
+CMD="MAKEFLAGS=\"CC=gcc-4.4\" fakeroot make-kpkg --jobs $cpucount --initrd --arch_in_name --append-to-version -openvz-${opts["ovzname"]} --revision ${opts["ovzname"]}~${opts["localname"]} kernel_image kernel_source kernel_headers"
 echo -e "\n"
 echo "using next command to create package:"
 echo "$CMD"
