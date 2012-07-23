@@ -19,36 +19,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -o errexit
+
 if [ $(whoami) != 'root' ]; then
    echo "Error: this script must be run as root."
    exit 1
 fi
 
 ##################
-# install packages
-##################
-
-apt-get install -y -qq git python-pip
-
-for p in nova glance; do
-  git clone git://github.com/openstack/python-${p}client
-  cd python-${p}client
-  python setup.py install
-  cd ..
-done
-
-##################
 # install custom kernel and openvz tools
 ##################
 
-git clone git://github.com/devananda/openvz-tools
-cd openvz-tools
+echo "Installing new kernel"
+
+wget https://raw.github.com/devananda/openvz-tools/master/install-openvz-kernel.sh 2>/dev/null
+chmod +x install-openvz-kernel.sh
 ./install-openvz-kernel.sh
 
 
 ##################
 # adjust networking for openvz guests
 ##################
+
+echo "Modifying sysctl.conf"
 
 cat <<EOF >>/etc/sysctl.conf
 net.ipv4.ip_forward = 1
@@ -63,6 +56,8 @@ EOF
 ##################
 # set some ubuntu-specific options for openvz
 ##################
+
+echo "Modifying vz.conf"
 
 cat <<"EOF" >>/etc/vz/vz.conf
 ADD_IP=debian-add_ip.sh
@@ -82,8 +77,10 @@ EOF
 
 ##################
 # have openvz automatically add guests to the network bridge
-# without this, guests will not have network access by default
+# without this, guests will not have network access
 ##################
+
+echo "Creating vps.mount script"
 
 cat <<"EOF" >/etc/vz/conf/vps.mount
 #!/bin/sh
@@ -149,22 +146,23 @@ chmod +x /etc/vz/conf/vps.mount
 
 ##################
 # fix directory permissions for the user running devstack
-# TODO: don't just assume that user is 'ubuntu'
 ##################
 
+echo "Creating 'vz' group and changing ownership of /var/lib/vz"
+
 groupadd vz
-usermod -a -G vz ubuntu
+usermod -a -G vz ubuntu 2>/dev/null || echo
+usermod -a -G vz stack 2>/dev/null  || echo
 cd /var/lib/vz/
 chown -R :vz ./
 chmod g+w *
 chmod g+w template/cache
-cd
-
 
 ##################
 # All done! 
 # Reboot into new kernel now
 ##################
 
-reboot now
+echo "Done preparing host for devstack + openvz"
+echo "You should reboot into the new kernel now."
 
