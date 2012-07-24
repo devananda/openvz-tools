@@ -3,7 +3,7 @@
 # Download and install openvz-enabled ubuntu kernel and modify grub.cfg 
 # to boot into that kernel, regardless of other installed kernels.
 # This will also install add'l required tools:
-#   vzctl, vzquota, and an old version of rsyslog
+#   vzctl, vzquota
 
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -51,6 +51,10 @@ VZ_PACKAGES="vzctl vzquota"
 # see bug: https://bugs.launchpad.net/ubuntu/+source/rsyslog/+bug/523610
 RSYSLOG_URL=${RSYSLOG_URL:-'http://mirror.netcologne.de/ubuntu/pool/main/r/rsyslog/'}
 RSYSLOG_PACKAGE=${RSYSLOG_PACKAGE:-'rsyslog_4.2.0-2ubuntu8_amd64.deb'}
+# set following variable to control which fix is applied
+#   config: change /etc/rsyslog.conf
+#   dpkg:   install old rsyslog package and set package hold
+RSYSLOG_FIX_METHOD=${RSYSLOG_FIX_METHOD:-config}
 
 # ###########################
 # routines to do all our work
@@ -69,7 +73,7 @@ do_download() {
 }
 
 do_install_kernel() { 
-   echo "installing kernel ..."
+   echo "installing kernel..."
    sudo dpkg -i linux-headers-${KERNEL_NAME}_amd64.deb linux-image-${KERNEL_NAME}_amd64.deb >> install.log 2>&1 || \
       die "dpkg install of kernels failed"
    echo "... done"
@@ -130,13 +134,18 @@ do_install_extra_packages() {
       die "failed to install openvz packages: $VZ_PACKAGES"
    echo "... done"
 
-   echo "Installing rsyslog fix..."
-   wget -q $RSYSLOG_URL/$RSYSLOG_PACKAGE -O /tmp/$RSYSLOG_PACKAGE || \
-      die "failed to donwload rsyslog"
-   sudo dpkg -i /tmp/$RSYSLOG_PACKAGE >> install.log 2>&1 || \
-      die "failed to install rsyslog"
-   sudo bash -c 'echo rsyslog hold | dpkg --set-selections' || \
-      die "failed to pin rsyslog version"
+   if [ "$RSYSLOG_FIX_METHOD" == "dkpg" ]; then
+      echo "Installing $RSYSLOG_PACKAGE ..."
+      wget -q $RSYSLOG_URL/$RSYSLOG_PACKAGE -O /tmp/$RSYSLOG_PACKAGE || \
+         die "failed to donwload rsyslog"
+      sudo dpkg -i /tmp/$RSYSLOG_PACKAGE >> install.log 2>&1 || \
+         die "failed to install rsyslog"
+      sudo bash -c 'echo rsyslog hold | dpkg --set-selections' || \
+         die "failed to pin rsyslog version"
+   else
+      echo "Updating /etc/rsyslog.conf ..."
+      sudo sed -i -e 's/^\$ModLoad imklog/#\$ModLoad imklog/g' /etc/rsyslog.conf
+   fi
    echo "... done"
 
 }
