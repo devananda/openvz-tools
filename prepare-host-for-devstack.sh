@@ -141,8 +141,14 @@ done
 exit 0
 EOF
 
-
 chmod +x /etc/vz/conf/vps.mount
+
+##################
+# create tun device if necessary
+##################
+[ ! -e /dev/net ] && mkdir /dev/net
+[ ! -e /dev/net/tun ] && mknod /dev/net/tun c 10 200
+/sbin/modprobe tun
 
 ##################
 # fix directory permissions for the user running devstack
